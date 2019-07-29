@@ -61,7 +61,8 @@ KNOB<string> KnobOutputFile(KNOB_MODE_WRITEONCE, "pintool",
 
 ofstream Out;
 FILE * trace;
-FILE * symbols;
+FILE * symbolsLibc;
+FILE * symbolsVSFTPD;
 bool read0;
 bool write0;
 bool firstInst;
@@ -304,8 +305,10 @@ VOID Fini(INT32 code, VOID *v)
 {
     fprintf(trace, "#eof\n");
     fclose(trace);
-    fprintf(symbols, "#eof\n");
-    fclose(symbols);
+    fprintf(symbolsLibc, "#eof\n");
+    fprintf(symbolsVSFTPD, "#eof\n");
+    fclose(symbolsVSFTPD);
+    fclose(symbolsLibc);
 }
 
 void printImgType(IMG img){
@@ -409,14 +412,15 @@ UINT64 printAndgetAddrImg(IMG img, const char *name, bool printInf){
     return ipImg;
 }
 
-UINT64 printAndgetAddrSym(IMG img,const char *ImgName, const char *symInq) {
+UINT64 printAndgetAddrSym(IMG img,const char *ImgName, const char *symInq, FILE * symbols) {
     const char* sectName = IMG_Name(img).c_str();
     UINT64 symAddr=0;
     if(strcmp(sectName,ImgName)==0){
         for( SYM sym= IMG_RegsymHead(img); SYM_Valid(sym); sym = SYM_Next(sym) ){
             //cerr << "Symbol Name: " << SYM_Name(sym) << endl;
             const char* symbName = SYM_Name(sym).c_str();
-            //fprintf(symbols,"Symbol name:%s\n",symbName );
+            string sAddrPrint = StringFromAddrint(SYM_Address(sym));
+            fprintf(symbols,"Symbol name:%s, Symbol Address:%s\n",symbName, sAddrPrint.c_str());
             if(strcmp(symbName,symInq)==0){
                 symAddr = SYM_Address(sym);
                 //cerr << "Symbol Name: " << symbName << ", Symbol Address: " << StringFromAddrint(symAddr) << endl;
@@ -430,7 +434,9 @@ UINT64 printAndgetAddrSym(IMG img,const char *ImgName, const char *symInq) {
 // Prints image and section name, type and address
 VOID loadImageSec(IMG img, VOID *v)
 {
-    libcMain = printAndgetAddrSym(img,"/lib/x86_64-linux-gnu/libc.so.6","__libc_start_main");
+    libcMain = printAndgetAddrSym(img,"/home/sina/Desktop/Research/Stateful protocol fuzzer/codes/vsftpd-3.0.3/vsftpd","__libc_start_main",symbolsVSFTPD);
+
+    libcMain = printAndgetAddrSym(img,"/lib/x86_64-linux-gnu/libc.so.6","__libc_start_main",symbolsLibc);
     ipVSFTPD = printAndgetAddrImg(img,"/home/sina/Desktop/Research/Stateful protocol fuzzer/codes/vsftpd-3.0.3/vsftpd",false);
 //    cerr << "bss start: " << StringFromAddrint(bssAddr.start) << ", and bss end: " << StringFromAddrint(bssAddr.end)<< " data start: "
 //    << StringFromAddrint(dataAddr.start) << ", and data end: " << StringFromAddrint(dataAddr.end) <<  endl;
@@ -628,9 +634,12 @@ int main(INT32 argc, CHAR **argv)
 
     firstInst= true;
     read0=write0=false;
-    trace = fopen("pinatrace.out", "w");
+    char *traceFileName = new char[14+10];
+    sprintf(traceFileName, "pinatrace_%d.out", PIN_GetPid());
+    trace = fopen(traceFileName, "w");
     fprintf(trace,"type, ip, addr, esp, initial sp\n");
-    symbols = fopen("libc-symbols.out", "w");
+    symbolsLibc = fopen("libc-symbols.out", "w");
+    symbolsVSFTPD = fopen("vsftpd-symbols.out", "w");
     ipVSFTPD = 0;
     libcMain = 0;
     mainAddr = 0;
